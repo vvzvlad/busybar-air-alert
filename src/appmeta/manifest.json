@@ -1,0 +1,9 @@
+{
+  "format_version": 1,
+  "id": "io.github.vvzvlad.airalert",
+  "name": "Air Raid Alert",
+  "version": "0.1.0",
+  "api_version": "27.12.0",
+  "description": "Air raid alerts for up to three regions of Ukraine and Israel.",
+  "author": "vvzvlad"
+}
