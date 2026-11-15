@@ -1,14 +1,15 @@
 # Air Raid Alert
 
-Air raid alerts for up to three regions of Ukraine and Israel.
+Air raid alerts for regions of Ukraine and cities of Israel.
 
 A JavaScript app for [BUSY Bar](https://busy.app). Work in progress.
 
 ## What it does
 
-- Pick up to three regions in the settings.
+- Pick up to three regions of Ukraine (or all of Israel) and up to three cities of Israel in the settings.
 - Quiet while there is no alert. During an alert the screen turns red with a flashing siren and the region's name, with a sound and the status light. The all-clear shows green for a minute.
-- Checks every 15 to 30 seconds.
+- Without a connection the last known state stays, dimmed, with a red cross in the corner.
+- Checks every 20 seconds.
 
 ## Data
 

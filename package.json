@@ -2,7 +2,7 @@
   "name": "busybar-air-alert",
   "private": true,
   "version": "0.1.0",
-  "description": "Air raid alerts for up to three regions of Ukraine and Israel.",
+  "description": "Air raid alerts for regions of Ukraine and cities of Israel.",
   "author": "vvzvlad",
   "type": "module",
   "scripts": {
