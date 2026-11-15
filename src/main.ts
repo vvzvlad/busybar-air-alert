@@ -1,3 +1,4 @@
+import { generateXpm2 } from "@busy-app/busy-lib";
 import { device } from "@shared/device";
 import manifest from "./appmeta/manifest.json";
 import { createScreen, type Element } from "./screen";
@@ -16,6 +17,36 @@ const CLEAR_MS = 60 * 1000;
 const WHITE = "#FFFFFFFF";
 const GREEN = "#00FF00FF";
 const RED = "#E00000FF";
+
+/** The siren at the left of the red screen, 9x12: y the rays, o its lit dome, w the glare on it, k the base. */
+const SIREN_LIT = [
+  "y...y...y",
+  ".y..y..y.",
+  ".........",
+  "...ooo...",
+  "..owooo..",
+  "y.owooo.y",
+  "..ooooo..",
+  "..ooooo..",
+  "..ooooo..",
+  ".kkkkkkk.",
+  "kkkkkkkkk",
+  "kkkkkkkkk",
+];
+/** The same siren between flashes: no rays, d the dark dome. */
+const SIREN_DARK = SIREN_LIT.map((row) => row.replace(/y/g, ".").replace(/[ow]/g, "d"));
+const SIREN_PALETTE = { ".": "none", y: "#FFE040", o: "#FFB000", w: "#FFFFFF", d: "#600000", k: "#404040" };
+/** Both siren pictures, built once; they take turns SIREN_MS apart. */
+const SIREN = [SIREN_LIT, SIREN_DARK].map((grid) => generateXpm2({ palette: SIREN_PALETTE, grid }));
+const SIREN_MS = 250;
+/** The text of the alert takes the 60 px right of the siren, x 12..71. */
+const TEXT_X = 42;
+const TEXT_W = 60;
+/**
+ * The names wider than that in the small font, 65 px each. A list, not textWidth(): that one brings the font maps
+ * into the app, about 17 KB of heap on the emulator.
+ */
+const WIDE_NAMES = ["IVANO-FRANKIVSK", "DNIPROPETROVSK"];
 
 /**
  * The regions of the settings: the key in ubilling's answer and the name on the screen. Sevastopol and Luhansk oblast
@@ -107,10 +138,10 @@ type State =
   | { kind: "quiet" };
 
 /**
- * Red with the regions under alert, green "ALL CLEAR" or "NO ALERTS", "--" before an answer and on errors, white
- * "SET REGION" when every region is None.
+ * Red with the siren and the regions under alert, green "ALL CLEAR" or "NO ALERTS", "--" before an answer and on
+ * errors, white "SET REGION" when every region is None. `flash`: which of the SIREN pictures is shown.
  */
-function frame(state: State): Element[] {
+function frame(state: State, flash: number): Element[] {
   switch (state.kind) {
     case "wait":
       return [{ type: "text", id: "dash", text: "--", font: "large", color: WHITE, x: 36, y: 8, align: "center" }];
@@ -130,22 +161,22 @@ function frame(state: State): Element[] {
           border_width: 0,
           align: "top_left",
         },
-        { type: "text", id: "title", text: "AIR ALERT", font: "small", color: WHITE, x: 36, y: -1, align: "top_mid", z_index: 1 },
-        // The longest name, IVANO-FRANKIVSK, is 65 px in this font, so one region stands still in the middle;
-        // several scroll.
-        state.names.length === 1
-          ? { type: "text", id: "regions", text: state.names[0], font: "small", color: WHITE, x: 36, y: 7, align: "top_mid", z_index: 1 }
+        { type: "xpmbitmap", id: "siren", data: SIREN[flash], x: 1, y: 2, align: "top_left", z_index: 1 },
+        { type: "text", id: "title", text: "AIR ALERT", font: "small", color: WHITE, x: TEXT_X, y: -1, align: "top_mid", z_index: 1 },
+        // One region stands still in the middle of the space right of the siren; several scroll, and so does a wide one.
+        state.names.length === 1 && WIDE_NAMES.indexOf(state.names[0]) < 0
+          ? { type: "text", id: "regions", text: state.names[0], font: "small", color: WHITE, x: TEXT_X, y: 7, align: "top_mid", z_index: 1 }
           : {
               type: "text",
               id: "regions",
               text: state.names.join(", "),
               font: "small",
               color: WHITE,
-              width: 72,
+              width: TEXT_W,
               scroll_rate: 1200,
               scroll_start_delay: 1500,
               scroll_repeat_delay: 1500,
-              x: 36,
+              x: TEXT_X,
               y: 7,
               align: "top_mid",
               z_index: 1,
@@ -171,15 +202,33 @@ function main(): void {
   let stopped = false;
   let timer: ReturnType<typeof setInterval> | undefined;
   let clearTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The siren picture shown, an index into SIREN, and the timer that flips it. */
+  let flash = 0;
+  let sirenTimer: ReturnType<typeof setInterval> | undefined;
 
   const report = (err: unknown) =>
     console.error(`${APP}: ${err instanceof Error ? err.message : String(err)}`);
   const screen = createScreen(APP, report);
-  const redraw = () => screen.show(frame(state));
+  const redraw = () => screen.show(frame(state, flash));
 
   function endClear(): void {
     if (clearTimer !== undefined) clearTimeout(clearTimer);
     clearTimer = undefined;
+  }
+
+  // The siren flashes only while an alert is on the screen.
+  function animate(): void {
+    const alert = state.kind === "alert";
+    if (alert && sirenTimer === undefined) {
+      sirenTimer = setInterval(() => {
+        flash = (flash + 1) % SIREN.length;
+        redraw();
+      }, SIREN_MS);
+    } else if (!alert && sirenTimer !== undefined) {
+      clearInterval(sirenTimer);
+      sirenTimer = undefined;
+      flash = 0;
+    }
   }
 
   // One poll at a time. An alert from a source that answered shows even when the other one failed.
@@ -208,6 +257,7 @@ function main(): void {
     } else if (state.kind !== "clear") {
       state = { kind: "quiet" };
     }
+    animate();
     redraw();
   }
 
@@ -236,6 +286,7 @@ function main(): void {
     stopped = true;
     screen.close();
     if (timer !== undefined) clearInterval(timer);
+    if (sirenTimer !== undefined) clearInterval(sirenTimer);
     endClear();
 
     // Not detached from inside the handler itself: with nothing else left the unbind stops the app on the spot, while this handler is still running.
